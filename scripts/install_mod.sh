@@ -1,6 +1,6 @@
 #!/bin/bash
 MODS_DIR="/Users/lincolncarlton/Library/Application Support/Steam/steamapps/common/Transport Fever 2/mods"
-SOURCE_DIR="/Users/lincolncarlton/Dev/local_ai_builder"
+SOURCE_DIR="/Users/lincolncarlton/Dev/tf2-ai-mod"
 TARGET_DIR="$MODS_DIR/AI_Optimizer_1"
 
 echo "Installing mod to $TARGET_DIR"
