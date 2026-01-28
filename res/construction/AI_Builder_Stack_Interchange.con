@@ -1,0 +1,460 @@
+local vec3 = require "vec3"
+local streetutil = require "streetutil"
+local interchangeutil = require "ai_builder_interchange_util"
+local util = require "ai_builder_base_util"
+
+local roadtypes = { "standard/town_medium_new.lua", "standard/town_large_new.lua", "standard/town_x_large_new.lua"}
+function data()
+return {
+	type = "STREET_CONSTRUCTION",
+	description = {
+		name = _("Stack Interchange (AI Builder)"),
+		description = _("Stack highway interchange construction, designed to work with the AI builder (can be used standalone too). Although the AI builder will automatically place interchanges if you want finer control of the positioning, place down this prefab and use the AI builder to connect it to another."),
+	},
+	availability = {yearFrom =     1925  
+
+	},
+	params = interchangeutil.commonParams(),
+--[[
+	params = {
+		{
+			key = "streetTypeSmallInterchange",
+			name = _("Number of lanes"),
+			values = { ("2"), _("3"), },
+			defaultIndex = 0,
+			yearFrom = 1850,
+			yearTo = 0
+		},
+				{
+			key = "streetTypeSmallInterchangeRamp",
+			name = _("Number of lanes (ramp)"),
+			values = { ("1"), ("2"), _("3"),("2c"), _("3c"),("4c"), _("5c"), _("6c")  },
+			defaultIndex = 1,
+			yearFrom = 9999,
+			yearTo = 0
+		},
+		{
+			key = "Central",
+			name =	_("Central Reservation"),
+			values = { _("Tight"), _("Normal"), _("Loose"), _("Extra Wide") },
+			defaultIndex = 0,
+			yearFrom = 9999,
+			yearTo = 0
+		},
+				{
+			key = "Connect",
+			name =	_("Connecting road"),
+			values = { _("NONE"), _("2 lane road"), _("4 lane road"), _("6 lane road") },
+			defaultIndex = 1,
+			yearFrom = 1850,
+			yearTo = 0
+		},
+						{
+			key = "Number",
+			name =	_("Number of junctions"),
+			values = { _("1"), _("2"), _("3")},
+			defaultIndex = 0,
+			yearFrom = 9999,
+			yearTo = 0
+		},
+		
+								{
+			key = "hiwayheight",
+			name =	_("Hiway height"),
+			uiType = "SLIDER",
+			values = { _("10"),_("15"), _("20"), _("25"), _("30") },
+			defaultIndex = 1,
+			yearFrom = 1850,
+			yearTo = 0
+		},
+		
+{
+			key = "length",
+			name =	_("Length"),
+			uiType = "SLIDER",
+			values = { _("50"),_("60"), _("70"), _("80"), _("90"),_("100"), _("110"), _("120"), _("130") },
+			defaultIndex = 4,
+			yearFrom = 9999,
+			yearTo = 0
+		},
+		
+		{
+			key = "gap",
+			name =	_("Gap between junctions"),
+			uiType = "SLIDER",
+			values = { _("180"),_("270"), _("360"), _("450"), _("540"),_("630"), _("720"), _("810"), _("900") },
+			defaultIndex = 1,
+			yearFrom = 9999,
+			yearTo = 0
+		},
+		{
+					key = "tail",
+			name =	_("Connecting tails "),
+			uiType = "SLIDER",
+			values = {  _("20"), _("30"), _("40"),_("50"),_("60"), _("70"), _("80"), _("90") },
+			defaultIndex = 2,
+			yearFrom = 9999,
+			yearTo = 0
+		},
+	},]]--
+	order = 6000,
+	updateFn = function(params)
+		local result = { }
+		result.models = { }
+		local size = params.aiBuilderInterchangeSize
+		--local length = minlengh + increment*params.stackinterchangesize
+		local length = 220
+		--local length = 210
+		--local length = 200
+		local center = interchangeutil.getCentral(params)
+	 
+		local isCentralLaneDrop = params.centralLaneDrop == 1
+		
+		
+		local rampedges = { }
+		
+		local zoffset = 10
+ 
+		local z = tonumber(interchangeutil.getHeightOffset(params))
+
+		if params.aiBuilderInterchangeLevel == 1 then -- elevated 
+			params.aiBuilderInterchangeSpecial = 1
+			z = z + 15
+		end 
+		if params.aiBuilderInterchangeLevel == 2 then -- elevated 
+			params.aiBuilderInterchangeSpecial = 2
+			z = z - 15
+			zoffset = -zoffset
+		end 
+		local z2 = z+zoffset
+		local z3 = z2+1.5*zoffset
+		local z4 = z3+zoffset
+		
+			local tail = 40
+		local a = 45
+		--local a = 48
+		local aoff = 10
+		local a1 = 37
+		
+		--local a2 = 36
+		if size == 0 then 
+			z4 = z - zoffset
+			length = 160
+			a1 = 45
+			aoff = 10
+			tail = 16 
+		elseif size == 2 then 
+			length = 270
+		end 
+		local a2 = 90-a1
+		local a3 = a1 -aoff 
+		local a4 = a2 + aoff
+		local juncoff = -length/4
+		local ramplen = length/4 --80
+		local coff = 27
+		 local coff2 = -coff/2
+		local diverge = 20--20
+		local ramplen2 = ramplen/2
+		if size == 0 then 
+			z4 = z - zoffset
+			length = 180
+			juncoff = -30
+			coff = 26
+			--coff2 = -20
+			ramplen = 45
+			 
+			 
+			diverge=20
+		end 
+		if size == 2 then 
+			--juncoff = juncoff-8 
+			juncoff = -55
+			 coff = coff+ 3
+		end 
+		
+		--local tail = 40	
+	
+		local hiwayedges= {}
+		local hiwaybridge= {}
+		local rampbridge = {}
+		local rampground = {}
+		local ramptunnel = {}
+		--local juncoff = -length/5 -- -50
+		
+		--local coff =  30
+	
+ 		
+
+		--east -> west
+		local exit1 = vec3.new( length,  center, z)
+		local exit2 = vec3.new( -length,  center, z)
+		interchangeutil.addStraightEdges(hiwayedges, 
+			vec3.new( length+tail,  center, z),
+			exit1,
+			exit2,
+			vec3.new(-length-tail,  center, z)) 
+			
+			
+			--west -> east
+		local exit3 = vec3.new( -length,  -center, z)
+		local exit4 = vec3.new( length,  -center, z)
+		interchangeutil.addStraightEdges(hiwayedges, 
+			vec3.new( -length-tail,  -center, z),
+			exit3,
+			exit4,
+			vec3.new(length+tail,  -center, z))
+		
+		-- north -> south
+		local exit5 = vec3.new(  center,-length,z)
+		local exit6 = vec3.new(  center,length,z)
+		local midbridge = 2*center
+		 streetutil.addStraightEdge(hiwayedges,vec3.new(   center, -length-tail, z),exit5)
+		 local midbridgeP = vec3.new(   center, -midbridge, z2)
+		 local midbridgeP2 = vec3.new(   center, midbridge, z2)
+		 if size > 0 then 
+			local midP = 0.5*(exit5+midbridgeP)
+			midP.z = exit5.z
+			streetutil.addStraightEdge(hiwayedges,exit5,midP)
+			
+			streetutil.addRamp(hiwayedges,midP,midbridgeP)
+			local midP2 = 0.5*(exit6+midbridgeP2)
+			midP2.z = exit6.z
+			streetutil.addRamp(hiwayedges,midbridgeP2,midP2)
+			streetutil.addStraightEdge(hiwayedges,midP2,exit6)
+		else 
+			streetutil.addRamp(hiwayedges,exit5,midbridgeP)
+		 
+			streetutil.addRamp(hiwayedges,midbridgeP2,exit6)
+		end
+		 streetutil.addStraightEdge(hiwaybridge,midbridgeP,midbridgeP2)
+		 streetutil.addStraightEdge(hiwayedges,exit6,vec3.new(   center,length+tail ,z))
+	
+		-- south -> north
+		local exit7 = vec3.new(  -center,length,z)
+		local exit8 = vec3.new(  -center,-length,z)
+		 local midbridgeP = vec3.new(   -center, midbridge, z2)
+		 local midbridgeP2 = vec3.new(   -center, -midbridge, z2)
+		 streetutil.addStraightEdge(hiwayedges,vec3.new(   -center, length+tail, z),exit7)
+		
+		 streetutil.addStraightEdge(hiwaybridge,midbridgeP,midbridgeP2)
+ 
+		 streetutil.addStraightEdge(hiwayedges,exit8,vec3.new(   -center,-length-tail ,z))
+		if size > 0 then 
+			local midP = 0.5*(exit7+midbridgeP)
+			midP.z = exit7.z
+			streetutil.addStraightEdge(hiwayedges,exit7,midP)
+			
+			streetutil.addRamp(hiwayedges,midP,midbridgeP)
+			local midP2 = 0.5*(exit8+midbridgeP2)
+			midP2.z = exit8.z
+			streetutil.addRamp(hiwayedges,midbridgeP2,midP2)
+			streetutil.addStraightEdge(hiwayedges,midP2,exit8)
+		else 
+			 streetutil.addRamp(hiwayedges,exit7,midbridgeP)
+		 
+			streetutil.addRamp(hiwayedges,midbridgeP2,exit8)
+		end
+		local function splitFromExit(p, xoff, yoff)
+			return vec3.new(p.x + (p.x >0 and xoff or -xoff),p.y + (p.y >0 and yoff or -yoff),z)
+		end
+		
+		local rampsplit1 = splitFromExit(exit1, juncoff, coff)
+		  interchangeutil.addArc(rampedges,a1,-aoff,exit1, rampsplit1)
+		
+		local rampsplit2 = splitFromExit(exit2, juncoff, coff)
+		  interchangeutil.addArc(rampedges,-a3,-aoff, rampsplit2, exit2)
+		
+		local rampsplit3 = splitFromExit(exit3, juncoff, coff)
+		   interchangeutil.addArc(rampedges,a1,-aoff,exit3, rampsplit3)
+		
+		local rampsplit4 = splitFromExit(exit4, juncoff, coff)
+		 interchangeutil.addArc(rampedges,-a3,-aoff, rampsplit4,exit4)
+		
+		local rampsplit5 = splitFromExit(exit5,  coff, juncoff)
+		 interchangeutil.addArc(rampedges,a2, aoff,exit5, rampsplit5)
+		
+		local rampsplit6 = splitFromExit(exit6, coff, juncoff)
+		    interchangeutil.addArc(rampedges,a4 , -aoff , rampsplit6,exit6)
+		
+		local rampsplit7 = splitFromExit(exit7,  coff, juncoff)
+		  interchangeutil.addArc(rampedges,a2,  aoff,exit7, rampsplit7)
+		 
+		local rampsplit8 = splitFromExit(exit8,  coff, juncoff)
+		  interchangeutil.addArc(rampedges,a4, -aoff, rampsplit8,exit8) 
+		
+		
+		
+		local function s(a, b)
+			return a>0 and a-b or a+b
+		end
+		
+		local function addRamp(p0, p1, isExit)
+			local t0 = p1 - p0 
+			local t1 = p1 - p0
+			if isExit then 
+				t0.z = 0 
+				t1.z = 2*t1.z
+			else 
+				t1.z = 0
+				t0.z = 2*t0.z
+			end
+			
+			streetutil.addEdge(rampground,p0,p1,t0,t1)
+		end 
+		local function addOverramp(startRotation, p1, p2, zhigh)
+			local coff2 =0 --coff/3
+			local xoffset = startRotation == 0 and ramplen or  coff2
+			local yoffset = startRotation == 0 and  coff2 or ramplen
+			local correction = zhigh > z and zoffset/2 or -zoffset/2
+			local p3 = vec3.new(s(p1.x,xoffset), s(p1.y,yoffset), p1.z+correction)
+			local p4 = vec3.new(s(p2.x,yoffset), s(p2.y,xoffset), p2.z+correction)
+			
+			addRamp(p1,p3, true )
+			addRamp(p4,p2, false )
+			local grad = 2*(p3.z - p1.z)/vec3.length(p3-p1)
+			print("The grad was",grad)
+			local rampedges = zhigh > z and rampbridge or ramptunnel
+			interchangeutil.addSplitArc(rampedges,startRotation, 90, p3, p4, zhigh, grad)
+		end
+		
+		local function addInneramp(startRotation, p1, p2 )
+			
+				--ramplen2 = ramplen2 * 1.5
+			local xoffset = startRotation == 0 and ramplen2 or  coff2
+			local yoffset = startRotation == 0 and  coff2 or ramplen2
+			if startRotation == 0 then 
+				--startRotation = aoff  
+			else 
+				--startRotation = 90 - aoff 
+			end 
+			local p3 = vec3.new(s(p1.x,xoffset), s(p1.y,yoffset), p1.z)
+			local p4 = vec3.new(s(p2.x,yoffset), s(p2.y,xoffset), p2.z)
+			--local innerdiverge=2*diverge 
+			local innerdiverge=2*diverge 
+			local innerArcAngle = 90-2*aoff-innerdiverge
+			local innerArcAngle = 90
+			 interchangeutil.addArc(rampground,startRotation-innerdiverge, innerdiverge, p1,p3)
+			interchangeutil.addArc(rampground,startRotation, innerArcAngle, p3,p4)
+			interchangeutil.addArc(rampground,startRotation+innerArcAngle, innerdiverge, p4,p2) 
+		end
+		
+		addOverramp(0, rampsplit1, rampsplit8, z3)
+		addInneramp( 0, rampsplit1,rampsplit6)
+		
+		addInneramp(90, rampsplit7,rampsplit2)
+		addOverramp(90, rampsplit5, rampsplit2, z4)
+		
+		addInneramp( 0, rampsplit3,rampsplit8)
+		addOverramp(0, rampsplit3, rampsplit6, z3)
+		
+		
+		addInneramp( 90, rampsplit5,rampsplit4)
+		addOverramp(90, rampsplit7, rampsplit4, z4)
+		local function findSnapNodes(edges)
+			local result = {}
+			
+			for i, edge in pairs(edges) do
+				if math.abs(edge[1][1])==length+tail or math.abs(edge[1][2])==length+tail then
+					result[#result+1]=i-1
+				end
+			end
+			return result
+		end
+		
+		local mainroadtype = interchangeutil.getRoadType(params)
+		
+		result.edgeLists = {
+			{
+				type = "STREET",
+				
+				params = {
+					type = mainroadtype,
+
+				},
+				edges = hiwayedges,
+				tag="hiwayedges",
+				snapNodes = findSnapNodes(hiwayedges),
+				freeNodes = streetutil.freeAllNodes(hiwayedges),
+			},
+			 {
+				type = "STREET",
+				
+				params = {
+					type = mainroadtype,
+
+				},
+				 edgeType = "BRIDGE",
+				 edgeTypeName = "cement.lua",
+				edges = hiwaybridge,
+				tag="hiwaybridge",
+				snapNodes = {},
+				freeNodes = streetutil.freeAllNodes(hiwaybridge),
+			},
+								{
+				type = "STREET",
+				params = {
+					--type = "standard/country_small_one_way_new.lua",
+					type = "standard/country_medium_one_way_new.lua",
+				},
+				edges = rampedges,
+					tag="rampedges",
+								type = "STREET",
+				--edgeType = "BRIDGE",
+				--edgeTypeName = "cement.lua",
+				snapNodes = {},
+				freeNodes = streetutil.freeAllNodes(rampedges),
+			},
+								{
+				type = "STREET",
+				params = {
+					type = "standard/country_small_one_way_new.lua",
+				},
+				tag="rampbridge",
+				edges = rampbridge,
+								type = "STREET",
+				 edgeType = "BRIDGE",
+				 edgeTypeName = "cement.lua",
+				snapNodes = {},
+				freeNodes = streetutil.freeAllNodes(rampbridge),
+			},
+											{
+				type = "STREET",
+				params = {
+					type = "standard/country_small_one_way_new.lua",
+				},
+				tag="ramptunnel",
+				edges = ramptunnel,
+								type = "STREET",
+				 edgeType = "TUNNEL",
+				 edgeTypeName = "street_old.lua",
+				snapNodes = {},
+				freeNodes = streetutil.freeAllNodes(ramptunnel),
+			},
+											{
+				type = "STREET",
+				params = {
+					type = "standard/country_small_one_way_new.lua",
+				},
+				tag="rampground",
+				edges = rampground,
+								type = "STREET",
+				 
+				snapNodes = {},
+				freeNodes = streetutil.freeAllNodes(rampground),
+			},
+
+
+			
+		}
+		
+		interchangeutil.applySpecialArgs(params, result)
+
+		result.groundFaces = { }
+
+		result.cost = 0
+
+		return result
+	end
+}
+
+end

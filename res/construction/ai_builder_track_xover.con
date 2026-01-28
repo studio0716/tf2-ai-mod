@@ -1,0 +1,305 @@
+local streetutil = require("streetutil")
+local vec3 = require("vec3")
+local util = require("ai_builder_base_util")
+
+
+local function hermite(t, p0, m0, p1, m1)
+	-- cubic hermite equation for 0<=t<=1, m means tangent. Source https://en.wikipedia.org/wiki/Cubic_Hermite_spline#Unit_interval_(0,_1)
+	-- p(t) = (2t^3-3t^2+1)p0 + (t^3-2t^2+t)m0 + (-2t^3 + 3t^2)p1 + (t^3-t^2)m1
+
+		return {
+			p = vec3.new
+			(
+			-- x =
+				(2 * t^3 - 3 * t^2 + 1) * p0.x+
+				(t^3 - 2 * t^2 + t) * m0.x + 
+				(- 2 * t^3 + 3*t^2) * p1.x +
+				( t^3 - t^2) * m1.x,
+			-- y =
+				(2 * t^3 - 3 * t^2 + 1) * p0.y+
+				(t^3 - 2 * t^2 + t) * m0.y + 
+				(- 2 * t^3 + 3*t^2) * p1.y +
+				( t^3 - t^2) * m1.y,
+			-- z =
+				(2 * t^3 - 3 * t^2 + 1) * p0.z+
+				(t^3 - 2 * t^2 + t) * m0.z + 
+				(- 2 * t^3 + 3*t^2) * p1.z +
+				( t^3 - t^2) * m1.z
+			),
+			-- thank you to wolframalpha https://www.wolframalpha.com/input?i=derivative+of+p%28t%29+%3D+%282t%5E3-3t%5E2%2B1%29p0+%2B+%28t%5E3-2t%5E2%2Bt%29m0+%2B+%28-2t%5E3+%2B+3t%5E2%29p1+%2B+%28t%5E3-t%5E2%29m1
+			-- p'(t) = m0 (3 t^2 - 4 t + 1) + m1 (3 t - 2) t + 6 (t - 1) t (p0 - p1)
+			t = vec3.new
+			(
+				m0.x * (3*t^2 - 4*t + 1) + m1.x * (3*t - 2) * t + 6 * (t - 1) * t * (p0.x - p1.x),
+				m0.y * (3*t^2 - 4*t + 1) + m1.y * (3*t - 2) * t + 6 * (t - 1) * t * (p0.y - p1.y),
+				m0.z * (3*t^2 - 4*t + 1) + m1.z * (3*t - 2) * t + 6 * (t - 1) * t * (p0.z - p1.z)
+			)
+						
+		}
+	end
+
+function data()
+
+	local minlengh = 30
+	local increment = 5
+	local maxleng = minlengh+20*increment
+	local lenghs = {}
+	for i = minlengh, maxleng, increment do 
+		table.insert(lenghs, tostring(i))
+	end
+	
+	local angles = {}
+	local minAngle = -30
+	local incrementAngle = 1
+	local maxAngle = minAngle+60*incrementAngle
+	for i = minAngle, maxAngle, incrementAngle do 
+		table.insert(angles, tostring(i))
+	end
+	
+	local rotations = {}
+	local minRot = -15
+	local incrementRot = 1
+	 
+	for i = minRot, maxAngle, incrementRot do 
+		table.insert(rotations, tostring(i))
+	end
+
+return {
+	type = "TRACK_CONSTRUCTION",
+	description = {
+		name = _("Cross over ai"),
+		description = _("Track crossover construction")
+	},
+	availability = {
+		yearFrom = -1,
+		yearTo = 0
+	},
+	order = 3000,
+	params = {
+		{
+			key = "aicrossoverlength",
+			name = _("Length"),
+			values = lenghs,
+			uiType = "SLIDER",
+			defaultIndex = 0,
+			yearFrom = 1850,
+			yearTo = 0
+		},
+		{
+			key = "aicrossoverangle",
+			name = _("Angle"),
+			values = angles,
+			uiType = "SLIDER",
+			defaultIndex = 30,
+			yearFrom = 1850,
+			yearTo = 0
+		},
+		{
+			key = "extrarotation",
+			name = _("Angle"),
+			values = rotations,
+			uiType = "SLIDER",
+			defaultIndex = 30,
+			yearFrom = 1850,
+			yearTo = 0
+		},
+		{
+			key = "cantenery",
+			name = _("Track cantenery?"),
+			values = { _("NO"), _("YES")},
+			defaultIndex = 0,
+			yearFrom = 1900,
+			yearTo = 0
+		},
+						{
+			key = "highspeedxover",
+			name = _("High speed cantenery?"),
+			values = { _("NO"), _("YES")},
+			defaultIndex = 0,
+			yearFrom = 1920,
+			yearTo = 0
+		},
+		
+	},
+	updateFn = function(params)
+
+		local result = { }
+
+		result.models = {
+
+		}
+
+
+		local edges = {}
+		local w = 5 
+		local l = minlengh+increment*params.aicrossoverlength
+		local angle = minAngle + incrementAngle * params.aicrossoverangle
+		print("angle was", angle)
+		--streetutil.addStraightEdge(edges, vec3.new(0,-40, 0), vec3.new( 0,  0 , 0)) 
+		--streetutil.addStraightEdge(edges, vec3.new(w,-40, 0), vec3.new( w,  0 , 0)) 	
+		if angle == 0 then 
+			local p0 = vec3.new(0,0, 0)
+			local p1 = vec3.new( 0,  l , 0)
+			 streetutil.addStraightEdge(edges, p0 , p1) 
+			local p2 =  vec3.new(w, 0, 0)
+			local p3 =  vec3.new(w, l, 0)
+			 streetutil.addStraightEdge(edges, p2 , p3) 
+			
+			--streetutil.addStraightEdge(edges, vec3.new(0,l/2, 0), vec3.new( 0,  l, 0)) 
+			--local half = hermite(0.5,vec3.new(0, 0, 0),  vec3.new(0, l+w, 0),vec3.new( w,  l, 0), vec3.new( 0,  l+w, 0))
+			
+			local crossover = vec3.new(w/2, l/2,0)
+			local t0 = 0.5*(p1-p0)
+			local rotate = math.rad(12)
+			local tcross1 = util.rotateXY(t0, -rotate)
+			streetutil.addEdge(edges, p0, crossover, t0, tcross1)
+			
+			streetutil.addEdge(edges, crossover,p3 , tcross1, t0)
+			local tcross2 = util.rotateXY(t0, rotate)
+			streetutil.addEdge(edges, p2, crossover, t0, tcross2)
+			
+			streetutil.addEdge(edges, crossover,p1 , tcross2, t0)
+		else 
+			local p0 = vec3.new(0,0, 0)
+			local t0 = vec3.new( 0,  l , 0)
+			local naturalT = util.rotateXY(t0, math.rad(angle))
+			local p1 = p0 + naturalT
+			local exitT = util.rotateXY(t0, 2*math.rad(angle))
+			streetutil.addEdgeAutoTangents(edges, p0, p1, t0, exitT)
+			  
+			local p2 =  vec3.new(w, 0, 0)
+			--local p3 =  p2 + naturalT
+			local p3 = util.nodePointPerpendicularOffset(p1, exitT, -w)
+			streetutil.addEdgeAutoTangents(edges, p2, p3, t0, exitT)
+			local leftXOverEdge = {
+				p0 = p0, 
+				t0 = t0,
+				p1 = p3, 
+				t1 = exitT
+			}
+			local rightXOverEdge = {
+				p0 = p2, 
+				t0 = t0,
+				p1 = p1, 
+				t1 = exitT
+			}
+
+			function util.applyEdgeAutoTangents(edge) 
+			 
+				local q0 = vec3.normalize(edge.t0)
+				local q1 = vec3.normalize(edge.t1)
+
+				local length = util.distance(edge.p0, edge.p1)
+				local angle = vec3.angleUnit(q0, q1)
+
+				local scale = streetutil.calcScale(length, angle)
+				print("scale was",scale," original length was ",vec3.length(edge.t0)," angle was",math.deg(angle)," signedAngle=",math.deg(util.signedAngle(q0,q1))," dist was",util.distance(edge.p0, edge.p1))
+				edge.t0 = vec3.mul(scale, q0)
+				edge.t1 = vec3.mul(scale, q1)
+			end 
+	
+			--util.applyEdgeAutoTangents(leftXOverEdge)
+			--util.applyEdgeAutoTangents(rightXOverEdge)
+	
+			local fullCollisionSolution = util.fullSolveForCollisionBetweenProposedEdges(leftXOverEdge, rightXOverEdge) 
+			local crossover = fullCollisionSolution.c
+		
+			local edge1 = { p0=p0, t0=t0, p1=p1, t1=exitT}
+			local edge2 = { p0=p2, t0=t0, p1=p3, t1=exitT}
+			local midS = util.solveForPositionHermiteFraction (0.5,edge1 )
+			local offsetFrac = 0.75
+			local xoverLeft = util.nodePointPerpendicularOffset(crossover, midS.t, offsetFrac*w)
+			local xoverRight = util.nodePointPerpendicularOffset(crossover, midS.t, -offsetFrac*w)
+			local s1 = util.solveForPosition(xoverLeft, edge1)
+			local s2 = util.solveForPosition(xoverRight, edge2)
+			--[[
+			streetutil.addEdgeAutoTangents(edges, p0, s1.p, s1.t0,  s1.t1)
+			streetutil.addEdgeAutoTangents(edges, s1.p, p1,  s1.t2,  s1.t3)
+			streetutil.addEdgeAutoTangents(edges, p2, s2.p,  s2.t0,  s2.t1)
+			streetutil.addEdgeAutoTangents(edges, s2.p, p3,  s2.t2,  s2.t3)
+			]]--
+			local s1 =fullCollisionSolution.edge1Solution
+			local s2 =fullCollisionSolution.edge2Solution 
+			
+			
+			local tangentAngle = util.signedAngle(naturalT, exitT)
+			print("tangentAngle was",math.deg(tangentAngle))
+			
+			--streetutil.addEdge(edges, p0, crossover, s1.t0, s1.t1)
+			
+			--streetutil.addEdge(edges, crossover,p3 , s1.t2, s1.t3)
+		 
+			--streetutil.addEdge(edges, p2, crossover, s2.t0, s2.t1)
+			
+			--streetutil.addEdge(edges, crossover,p1 , s2.t2, s2.t3)
+			
+			-- no autotangents max angle 12 at 60 len
+			-- max angle 8 at 50
+			-- max angle 7 at 45
+			local xover1Angle =  util.signedAngle( s1.t0, s1.t1)
+			local xover2Angle =  util.signedAngle( s2.t0, s2.t1)
+			local xover3Angle =  util.signedAngle( s1.t2, s1.t3)
+			local xover4Angle =  util.signedAngle( s2.t2, s2.t3)
+			local relativeAngle = xover1Angle - xover2Angle
+			print("angle xover1 was", math.deg(xover1Angle), " xover2 was", math.deg(xover2Angle), " relative angle was",math.deg(relativeAngle), " xover3Angle=",math.deg(xover3Angle),"xover4Angle=",math.deg(xover4Angle))
+			--local absRotation = math.rad(1)
+			local absRotation = math.rad(minRot + incrementRot * params.extrarotation)
+			local rotate = xover1Angle <  0 and -absRotation or absRotation
+			local rotate = tangentAngle <  0 and -absRotation or absRotation
+			rotate = -rotate
+			s1.t1 = util.rotateXY(s1.t1, rotate)
+			s1.t2 = util.rotateXY(s1.t2, rotate)
+			s2.t1 = util.rotateXY(s2.t1, -rotate)
+			s2.t2 = util.rotateXY(s2.t2, -rotate)
+			local xover1Angle =  util.signedAngle( s1.t0, s1.t1)
+			local xover2Angle =  util.signedAngle( s2.t0, s2.t1)
+			local xover3Angle =  util.signedAngle( s1.t2, s1.t3)
+			local xover4Angle =  util.signedAngle( s2.t2, s2.t3)
+			local relativeAngle = xover1Angle - xover2Angle
+			print("after rotation angle xover1 was", math.deg(xover1Angle), " xover2 was", math.deg(xover2Angle), " relative angle was",math.deg(relativeAngle), " xover3Angle=",math.deg(xover3Angle),"xover4Angle=",math.deg(xover4Angle))
+			--local absRotation = math.rad(1)))
+			streetutil.addEdgeAutoTangents(edges, p0, crossover, s1.t0, s1.t1)
+			
+			streetutil.addEdgeAutoTangents(edges, crossover,p3 , s1.t2, s1.t3)
+		 
+			streetutil.addEdgeAutoTangents(edges, p2, crossover, s2.t0, s2.t1)
+			
+			streetutil.addEdgeAutoTangents(edges, crossover,p1 , s2.t2, s2.t3)
+		end 
+		
+		
+		--streetutil.addEdge(edges, vec3.new(0, 0, 0), half.p, vec3.new(0, (l+w)/2, 0), half.t)
+		--streetutil.addEdge(edges, half.p, vec3.new( w,  l, 0),half.t, vec3.new( 0,  (l+w)/2, 0))
+		
+		--streetutil.addEdge(edges,vec3.new(0, 0, 0),  vec3.new(w, l , 0),vec3.new( 0,  l+w, 0), vec3.new( 0,  l+w, 0))
+		-- streetutil.addEdge(edges,vec3.new(w, 0, 0),  vec3.new(0, l, 0),vec3.new( 0,  l+w, 0), vec3.new( 0, l+w, 0)) 
+		
+		half = hermite(0.5,vec3.new(w, 0, 0),  vec3.new(0, l+w, 0),vec3.new( 0,  l, 0), vec3.new( 0, l+w, 0)) 
+		--streetutil.addEdge(edges, vec3.new(w, 0, 0), half.p, vec3.new(0, (l+w)/2, 0), half.t)
+		--streetutil.addEdge(edges, half.p, vec3.new( 0,  l, 0), half.t, vec3.new( 0,  (l+w)/2, 0))
+		
+		--streetutil.addStraightEdge(edges, vec3.new(0,l, 0), vec3.new( 0,  l+40 , 0)) 
+		--streetutil.addStraightEdge(edges, vec3.new(w,l, 0), vec3.new( w,  l+40 , 0)) 
+		 
+		-- streetutil.addStraightEdge(edges, vec3.new(w, 0, 0), vec3.new( w,  l, 0))
+		result.edgeLists = {
+			{
+				type = "TRACK",
+				params = {
+					type = "standard.lua"
+				},
+				edges = edges,
+				snapNodes = {},
+				freeNodes = streetutil.freeAllNodes(edges),
+			},
+		}
+
+		result.groundFaces = { }
+
+		result.cost = 0
+
+		return result
+	end
+}
+
+end

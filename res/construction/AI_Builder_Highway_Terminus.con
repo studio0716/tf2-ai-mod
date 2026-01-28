@@ -1,0 +1,257 @@
+local vec3 = require "vec3"
+local streetutil = require "streetutil"
+local interchangeutil = require "ai_builder_interchange_util"
+local util = require "ai_builder_base_util"
+local types = {"standard/country_medium_one_way_new.lua", "standard/country_large_one_way_new.lua"}
+local roadtypes = { "standard/town_medium_new.lua", "standard/town_large_new.lua", "standard/town_x_large_new.lua"}
+function data()
+return {
+	type = "STREET_CONSTRUCTION",
+	description = {
+		name = _("Highway terminus (AI Builder)"),
+		description = _("An end-of-highway construction designed to work with the AI builder (can be used standalone too). Although the AI builder will automatically place interchanges if you want finer control of the positioning, place down this prefab near a town and use the AI builder to connect it to another."),
+	},
+	availability = {yearFrom = 1925
+
+	},
+	params = interchangeutil.commonParams(),
+	--[[
+	params = {
+		{
+			key = "streetTypeSmallInterchange",
+			name = _("Number of lanes"),
+			values = { ("2"), _("3"), },
+			defaultIndex = 0,
+			yearFrom = 1850,
+			yearTo = 0
+		},
+				{
+			key = "streetTypeSmallInterchangeRamp",
+			name = _("Number of lanes (ramp)"),
+			values = { ("1"), ("2"), _("3"),("2c"), _("3c"),("4c"), _("5c"), _("6c")  },
+			defaultIndex = 1,
+			yearFrom = 9999,
+			yearTo = 0
+		},
+		{
+			key = "Central",
+			name =	_("Central Reservation"),
+			values = { _("Tight"), _("Normal"), _("Loose"), _("Extra Wide") },
+			defaultIndex = 0,
+			yearFrom = 9999,
+			yearTo = 0
+		},
+				{
+			key = "Connect",
+			name =	_("Connecting road"),
+			values = { _("NONE"), _("2 lane road"), _("4 lane road"), _("6 lane road") },
+			defaultIndex = 1,
+			yearFrom = 1850,
+			yearTo = 0
+		},
+						{
+			key = "Number",
+			name =	_("Number of junctions"),
+			values = { _("1"), _("2"), _("3")},
+			defaultIndex = 0,
+			yearFrom = 9999,
+			yearTo = 0
+		},
+		
+								{
+			key = "hiwayheight",
+			name =	_("Hiway height"),
+			uiType = "SLIDER",
+			values = { _("10"),_("15"), _("20"), _("25"), _("30") },
+			defaultIndex = 1,
+			yearFrom = 1850,
+			yearTo = 0
+		},
+		
+{
+			key = "length",
+			name =	_("Length"),
+			uiType = "SLIDER",
+			values = { _("50"),_("60"), _("70"), _("80"), _("90"),_("100"), _("110"), _("120"), _("130") },
+			defaultIndex = 4,
+			yearFrom = 9999,
+			yearTo = 0
+		},
+		
+		{
+			key = "gap",
+			name =	_("Gap between junctions"),
+			uiType = "SLIDER",
+			values = { _("180"),_("270"), _("360"), _("450"), _("540"),_("630"), _("720"), _("810"), _("900") },
+			defaultIndex = 1,
+			yearFrom = 9999,
+			yearTo = 0
+		},
+		{
+					key = "tail",
+			name =	_("Connecting tails "),
+			uiType = "SLIDER",
+			values = {  _("20"), _("30"), _("40"),_("50"),_("60"), _("70"), _("80"), _("90") },
+			defaultIndex = 2,
+			yearFrom = 9999,
+			yearTo = 0
+		},
+	},]]--
+	order = 6000,
+	updateFn = function(params)
+		local result = { }
+		local roadedges = {}
+		local rampbridge = {}
+		local rampground = {}
+		local mainLine = {}
+		local roundabout = {}
+		result.models = { }
+		local size = params.aiBuilderInterchangeSize
+		local isThreeLane = params.aiBuilderInterchangeLaneCount == 1
+		local heightOffset = interchangeutil.getHeightOffset(params) 
+		local r = isThreeLane and 60 or 40
+		if size == 0 then 
+			r = r * 0.75 
+		elseif size == 2 then 
+			r = r * 1.5
+		end 	
+		local position = vec3.new(r,0,heightOffset)
+		local tangent = vec3.new(0,1,0)
+		local perpTangent = vec3.new(-1, 0,0)
+		
+		local length = r * 4 * (math.sqrt(2)-1)
+		
+		local elevationHeight = 15
+		local isUnderground = params.aiBuilderInterchangeLevel == 2
+		local isElevated = params.aiBuilderInterchangeLevel == 1
+		local isGroundLevel = not isElevated and not isUnderground
+		local mainLineOffset = isUnderground and -elevationHeight or isElevated and elevationHeight or 0
+		
+		local startNode = position 
+		local circleMidPoint = position + r*perpTangent
+		
+	
+		local node2 =  position + r*tangent + r*perpTangent
+		local node3 = position + 2*r*perpTangent
+		streetutil.addEdge(roundabout, startNode, node2, length*tangent,  length*perpTangent)
+		local s1 = util.solveForPositionHermiteFraction2(0.5, node2, length*perpTangent, node3, -length*tangent)
+		
+		
+		--streetutil.addEdge(roundabout, node2, node3, length*perpTangent, -length*tangent)
+		streetutil.addEdge(roundabout, node2, s1.p, s1.t0, s1.t1)
+		streetutil.addEdge(roundabout, s1.p, node3, s1.t2, s1.t3)
+		
+		local node4 = position + r*perpTangent-r*tangent
+		--streetutil.addEdge(roundabout, node3, node4,-length*tangent, -length*perpTangent)
+		local s2 = util.solveForPositionHermiteFraction2(0.5, node3, -length*tangent, node4, -length*perpTangent)
+		streetutil.addEdge(roundabout, node3, s2.p, s2.t0, s2.t1)
+		streetutil.addEdge(roundabout, s2.p, node4, s2.t2, s2.t3) 
+		 
+		streetutil.addEdge(roundabout,node4, startNode, -length*perpTangent, length*tangent)
+		
+		local central = interchangeutil.getCentral(params)
+		print("Central was ",central)
+		local centerOffset = vec3.new(0,central,0)
+		local highwayStartPos = circleMidPoint+2*r*perpTangent
+		local highwayExitPos = highwayStartPos + 40*perpTangent
+		highwayExitPos.z = highwayExitPos.z + mainLineOffset
+		local highwayExitPos1 = highwayExitPos+centerOffset
+		local highwayExitPos2 = highwayExitPos-centerOffset
+		debugPrint({highwayExitPos1=highwayExitPos1, highwayExitPos2=highwayExitPos2})
+		local function addSplitEdge(p0, t0, p1, t1, isExit)
+			local dist = util.distance(p0, p1)
+			t0 = dist*vec3.normalize(t0)
+			t1 = dist*vec3.normalize(t1)
+			--debugPrint({p0=p0,p1=p1, t0=t0,t1=t1})
+			--streetutil.addEdge(mainLine, p0, p1, t0, t1)
+			local s = util.solveForPositionHermiteFraction2(0.5,p0, t0, p1, t1)
+			streetutil.addEdge(isExit and mainLine or roundabout, p0, s.p, s.t0, s.t1)
+			streetutil.addEdge(isExit and roundabout or mainLine, s.p, p1, s.t2, s.t3)
+		end 
+		addSplitEdge(s1.p, util.rotateXY(s1.t, -math.rad(45)), highwayExitPos1, perpTangent, false)
+		addSplitEdge(highwayExitPos2, -1*perpTangent, s2.p, util.rotateXY(s2.t, math.rad(45)), true)
+	
+		local mainLineEdgeType = isElevated and "BRIDGE" or isUnderground and "TUNNEL" or nil
+		local mainLineEdgeTypeName = isElevated and "cement.lua" or isUnderground and "street_old.lua" or nil
+		
+		
+		streetutil.addStraightEdge(roadedges,startNode,startNode-40*perpTangent) 
+		 streetutil.addStraightEdge(roadedges, node2, node2+40*tangent)
+		 streetutil.addStraightEdge(roadedges, node4, node4-40*tangent)
+		--streetutil.addStraightEdge(mainLine, highwayStartPos+centerOffset,highwayExitPos1) 
+		--streetutil.addStraightEdge(mainLine,highwayExitPos-centerOffset, highwayStartPos-centerOffset) 
+		
+		--streetutil.addEdge
+		
+		result.edgeLists = {
+			{
+				type = "STREET",
+				edgeType = mainLineEdgeType,
+				edgeTypeName = mainLineEdgeTypeName,
+				params = {
+					type = interchangeutil.getRoadType(params),
+				},
+				edges = mainLine,
+				snapNodes = { },
+				freeNodes = streetutil.freeAllNodes(mainLine),
+			},
+			{
+				type = "STREET",
+				--edgeType = "BRIDGE",
+				--edgeTypeName = "cement.lua",
+				params = {
+					type = interchangeutil.getRoadType(params),
+				},
+				edges = roundabout,
+				snapNodes = { },
+				freeNodes = streetutil.freeAllNodes(roundabout),
+			},
+												{
+				type = "STREET",
+				params = {
+					type =  "standard/country_small_one_way_new.lua",
+
+				},
+				edges = rampground,
+								type = "STREET",
+				snapNodes = {},
+				freeNodes = streetutil.freeAllNodes(rampground),
+			},
+												{
+				type = "STREET",
+				params = {
+					type = "standard/country_small_one_way_new.lua",
+
+				},
+				edges = rampbridge,
+								type = "STREET",
+				edgeType = "BRIDGE",
+				edgeTypeName = "cement.lua",
+				snapNodes = {},
+				freeNodes = streetutil.freeAllNodes(rampbridge),
+			},
+		}
+		
+	
+		if  params.aiBuilderInterchangeConnectRoad > 0 then
+			print("Connecting road type was ",interchangeutil.getConnectingRoadType(params), "underlyign arg",params.aiBuilderInterchangeConnectRoad)
+			result.edgeLists[#result.edgeLists+1]={
+				type = "STREET",
+				params = {
+					type = interchangeutil.getConnectingRoadType(params)
+				},
+				edges = roadedges,
+				snapNodes = interchangeutil.findSnapNodes(roadedges,result.edgeLists),
+				freeNodes = streetutil.freeAllNodes(roadedges),
+			}		
+		end
+
+		result.groundFaces = { }
+
+		result.cost = 0
+
+		return result
+	end
+}
+
+end

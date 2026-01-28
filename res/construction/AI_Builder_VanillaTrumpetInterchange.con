@@ -1,0 +1,528 @@
+local vec3 = require "vec3"
+local streetutil = require "streetutil"
+local streetutil2 = require "ai_builder_interchange_util"
+local util = require "ai_builder_base_util"
+
+local types = { "standard/country_small_one_way_new.lua", "standard/country_medium_one_way_new.lua", "standard/country_large_one_way_new.lua"}
+
+function streetutil2.createExit(edges, p, xoff, yoff, a0, a1, isEntry) 
+	if not a1 then a1 = 10-a0 end
+	local rampsplit =  vec3.new(p.x + (p.x >0 and xoff or -xoff),p.y + (p.y >0 and yoff or -yoff),p.z)
+	if isEntry then 
+		streetutil2.addArc(edges,a1,a0,rampsplit,p)
+	else 
+		streetutil2.addArc(edges,a0,a1,p, rampsplit)
+	end
+	return rampsplit 
+end   
+function streetutil2.connectEdgesWithRotationBoost(edges, p0, p1, r0, r1) 
+	local t0 = util.rotateXY(p1 - p0, math.rad(r0)) 
+	local t1 = util.rotateXY(p1 - p0, math.rad(r1))
+	streetutil.addEdge(edges, p0, p1, t0, t1)
+end  
+function data()
+	local minlength = 30
+	local increment = 10
+	local maxlength = minlength+20*increment
+	local lengths = {}
+	for i = minlength, maxlength, increment do 
+		table.insert(lengths, tostring(i))
+	end
+	
+	local juncgaps = {}
+	local minJuncOffset = 270
+	local juncIncrement = 90
+	local maxJuncOffset = minJuncOffset + 10*juncIncrement
+	for i = minJuncOffset, maxJuncOffset, juncIncrement do 
+		table.insert(juncgaps, tostring(i))
+	end
+	local params = streetutil2.commonParams(0)
+	local params2 = {
+ 
+		{
+			key = "juncount",
+			name = _("Number of junctions"),
+			values = { "1", "2", "3", "4", "5"},
+			defaultIndex = 0,
+			yearFrom = 1850,
+			yearTo = 0
+		},
+		
+		{
+			key = "junctiongap",
+			name = _("Gap between junctions"),
+			uiType = "SLIDER",
+			values = juncgaps,
+			defaultIndex = 1,
+			yearFrom = 1850,
+			yearTo = 0
+		},
+		{
+			key = "connectingTailLength",
+			name = _("Connecting road length"),
+			uiType = "SLIDER",
+			values = lengths,
+			defaultIndex = 1,
+			yearFrom = 1850,
+			yearTo = 0
+		}
+	}
+	for _,param in pairs(params2) do
+		table.insert(params,param)
+	end
+return {
+	type = "STREET_CONSTRUCTION",
+	description = {
+		name = _("Trumpet interchange ai builder"),
+		description = _("Construct a trumped style interchange for express roads"),
+	},
+	availability = {
+		yearFrom = util.tracelog and 0 or -1,
+		yearTo = util.tracelog and 0 or -1
+	},
+	params = params,
+	
+	order = 6100,
+	updateFn = function(params)
+		local result = { }
+		xpcall(function() 
+		result.models = { }
+		
+		 
+		local size = params.vanillahiwaysize or 0
+		local length = 100 + size*50
+		if size == 0 then 
+			length = 100 
+		elseif size == 1 then 
+			length = 140 
+		else 
+			length = 200 
+		end
+		
+		local center = streetutil2.getCentral(params)
+		local center2 = params.centralLaneDrop == 1 and center-2 or center 
+		local highwaylevel = params.highwaylevel
+		-- highwaylevel = 1
+		local rampedges = { }
+		
+		local zoffset = 9
+ 
+		local z = 0 
+		if params.vanillahiwayheight then 
+			z = streetutil2.getHeight(params)
+		end
+		local z2 = z+zoffset
+		local z3 = z
+		local z4 = z3+zoffset
+		local basetail = 30
+		if highwaylevel == 1 then 
+			z2 = z 
+			z = z+zoffset
+			--length = math.max(length, 110)
+		end 
+		if highwaylevel == 2 then 
+			z2 = z 
+			z = z -zoffset
+		end 
+		local connectTail = minlength+increment*params.connectingTailLength
+		local hiwayedges= {}
+		local tailedges = {}
+		local rampbridge = {}
+		local rampground = {}
+		local fourlaneroad = {}
+		local twolaneroad = {}
+		local twolanebridge= {}
+		local juncoff = -length/5 -- -50
+		local coff =  22
+		--local a = 40
+		--local a2 = 10
+		local a = 40
+		local a2 = 10
+		
+		
+		local northSouthLength = math.max(95, length/2)
+		 
+		local coff3 = 24
+		--local joinPoint = length/3
+		local juncoff2 = -length/2
+		if size == 1 then 
+			 --juncoff2 = -65
+			 ---coff3 = 23
+			 --coff =23
+			--northSouthLength = 110
+		end
+		local outerMidExit = 0
+		if size == 0 then 
+			outerMidExit = center
+		end
+		local splitFrac = 2/3
+		local splitFrac = 1-(length-outerMidExit)/(2*length)
+		print("splitFrac was",splitFrac)
+		local midExitPoint = -math.max((splitFrac*length+center)/1.9, 46)
+		local juncoff3 = midExitPoint /1.5
+		local boost = 1.5 -- 1.9
+		
+	--	local midArcPoint = math.max(length/2 + center + coff, 75)
+	--	local midArcPoint = math.max(coff+center-midExitPoint , 75)
+		local midArcPoint = math.max(splitFrac*length, 75)
+		--local joinPoint = (splitFrac*length-center)/2
+		local joinPoint = splitFrac*length
+		--local midArcPoint = math.max(joinPoint/2 + center, 90)
+ 		local juncinterval = minJuncOffset+params.junctiongap*juncIncrement
+		local boostAngle = 14
+		if size == 1 then 
+			boostAngle = 25
+			boostAngle = 35
+		end
+		if size == 0 then 
+			a = 39
+			a2 = 11
+			coff = 25
+			coff3 = 22
+			--boostAngle = 25
+			coff3 = 23
+			
+			--coff3 = 10
+			--juncoff2 = 
+			--boostAngle = 25
+		end
+		if size >= 2 then 
+			--northSouthLength = 150
+			boost = 1.1
+			coff = 17
+		end 
+		local boostAngle2 = 10
+		
+		--local east = params.juncount > 0 and -juncinterval or 0
+		
+		--local west = params.juncount > 1 and juncinterval or 0
+		local east = -math.floor(params.juncount/2)*juncinterval
+		local west = math.ceil((params.juncount )/2)*juncinterval
+		for o = east, west, juncinterval do
+			local gapfil = juncinterval - 2*length
+			local tailleft = o == east and basetail or gapfil/2
+			local tailright = o == west and basetail or gapfil/2
+	
+			--east -> west
+			local exit1 = vec3.new(o+ math.min(length, 150),  center, z)
+			local exit2 = vec3.new(o+math.max(-length, -150),  center, z)
+		
+
+			local exit1off = exit1 
+			local exit2off = exit2
+			if center ~= center2 then 
+				exit1off= vec3.new(exit1.x+juncoff, center2,z )
+				exit2off= vec3.new(exit2.x-juncoff, center2,z )
+				local baseT = exit2-exit1 
+				local deflectionAngle = streetutil2.signedAngle(baseT, exit1off-exit1)
+				streetutil.addEdgeAutoTangents(hiwayedges, exit1, exit1off, streetutil2.rotateXY(baseT, 2*deflectionAngle),baseT )
+				streetutil.addEdgeAutoTangents(hiwayedges, exit2off, exit2, baseT,streetutil2.rotateXY(baseT, -2*deflectionAngle) )
+			end  
+
+			streetutil.addStraightEdge(tailedges, vec3.new( o+length+tailright,  center, z), exit1)
+			
+			-- long straight, want to divide
+			
+			local exitOpposite = vec3.new( o+outerMidExit,  center, z)
+			streetutil.addStraightEdge(hiwayedges, 	exit1off, exitOpposite)
+ 			streetutil.addStraightEdge(hiwayedges, 	exitOpposite, exit2off)
+			
+			
+			streetutil.addStraightEdge(tailedges, exit2, vec3.new(o-length-tailleft,  center, z))  
+				
+				
+				--west -> east
+			local exit3 = vec3.new( o+outerMidExit,  -center, z)
+			local exit4 = vec3.new( o+length,  -center, z)
+			local exit3off = exit3 
+			local exit4off = exit4
+			if center ~= center2 then 
+				exit3off= vec3.new(exit3.x-juncoff, -center2,z )
+				exit4off= vec3.new(exit4.x+juncoff, -center2,z )
+				local baseT = exit4-exit3 
+				local deflectionAngle = streetutil2.signedAngle(baseT, exit3off-exit3)
+				streetutil.addEdgeAutoTangents(hiwayedges, exit3, exit3off, util.rotateXY(baseT, 2*deflectionAngle),baseT )
+				streetutil.addEdgeAutoTangents(hiwayedges, exit4off, exit4, baseT,util.rotateXY(baseT, -2*deflectionAngle) )
+			end  
+			--streetutil.addStraightEdge(tailedges, 	vec3.new( o-length-tailleft,  -center, z), exit3)
+			streetutil.addStraightEdge(tailedges, 	  vec3.new( o-length-tailleft,  -center, z),vec3.new( o-length,  -center, z))
+			streetutil.addStraightEdge(tailedges, 	vec3.new( o-length,  -center, z), exit3)
+		
+			 streetutil.addStraightEdge(hiwayedges, 	exit3off, exit4off)
+		 	streetutil.addStraightEdge(tailedges, exit4, vec3.new(o+length+tailright,  -center, z))
+			 
+			
+			
+			
+			
+			-- north -> south
+			local exit5 = vec3.new(  o,northSouthLength,z3)
+			streetutil.addStraightEdge(fourlaneroad, exit5, vec3.new(o, northSouthLength+connectTail, z3))
+			
+			
+			
+			
+			local brigeSouth = vec3.new(o,-center*2, z2)
+			local brigeNorth = vec3.new(o,center*2, z2)
+			streetutil.addRamp(twolaneroad, exit5, brigeNorth)
+			streetutil.addStraightEdge(highwaylevel ==0 and twolanebridge or twolaneroad,brigeNorth,brigeSouth)
+			local bridgeSouthJoin = brigeSouth
+			if size > 0 then 
+				bridgeSouthJoin = vec3.new(o, midExitPoint , z2)
+				streetutil.addStraightEdge(  highwaylevel ==0 and twolanebridge or twolaneroad,brigeSouth,bridgeSouthJoin)
+				 
+			end 
+			--local midArcZ = size < 2 and (highwaylevel == 0 and z+zoffset/2 or z-zoffset/2) or z
+			local midArcZ = size < 2 and (highwaylevel == 1 and z-zoffset/2 or z+zoffset/2) or z
+			local midarc = vec3.new(o+joinPoint/2, -midArcPoint , midArcZ)
+			streetutil2.addArc(  twolaneroad, 90, -90, bridgeSouthJoin, midarc)
+			local function  createExit(edges, p, xoff, yoff, a0, a1, isEntry, o)
+				if not o then o = 0 end
+				if not a1 then a1 = 10-a0 end
+				local rampsplit =  vec3.new(p.x + ((p.x-o) >0 and xoff or -xoff),p.y + (p.y >0 and yoff or -yoff),p.z)
+				if isEntry then 
+					streetutil2.addArc(edges,a1,a0,rampsplit,p)
+				else 
+					streetutil2.addArc(edges,a0,a1,p, rampsplit)
+				end
+				return rampsplit 
+			end   
+			if size < 2 then 
+				local exitjoin = vec3.new(o+ joinPoint, midExitPoint ,z)
+				streetutil2.addArc(twolaneroad, 0, -90, midarc, exitjoin)
+				
+				  streetutil2.connectEdgesWithRotationBoost(rampedges, exitjoin, exit4, boostAngle, boostAngle)
+				streetutil2.connectEdgesWithRotationBoost(rampedges, exit3, exitjoin, -boostAngle, -boostAngle)
+			else 
+				local rampsplit1 = createExit(rampedges, exit3,  juncoff3, coff, a, a2-a, false,o) 
+				local exitjoin = vec3.new(o+  joinPoint, midExitPoint ,z)
+				   streetutil2.addArc(rampedges, a2-a,90 ,rampsplit1, exitjoin)
+				   streetutil2.addArc(rampedges, 90,a ,exitjoin, midarc)
+				
+				local rampsplit2 = createExit(rampedges, exit4, juncoff3, coff, a+a2, -a2, true,o) 
+				 streetutil2.addArc(rampedges, 0,a2-a,midarc, rampsplit2)
+			end
+				
+			
+			
+			streetutil2.v3toArr = function(p)
+	return {p.x, p.y, p.z}
+end
+	function streetutil2.applyTangentBoostLastEdge(edges, boost)
+		 edges[#edges-1][2]=streetutil2.v3toArr(boost*util.v3fromArr(edges[#edges-1][2]))
+			 edges[#edges][2]=streetutil2.v3toArr(boost*util.v3fromArr(edges[#edges][2]))
+	
+	end 
+			
+			 local rampsplit1 = createExit(rampedges, exit1, juncoff2, coff3, a, a2-a, false, o) 
+			--rampedges[#rampedges][2]=streetutil2.v3toArr(1.5*streetutil2.v3fromArr(rampedges[#rampedges][2]))
+			--local rampsplit2 = streetutil2.createExit(rampedges, exit2, juncoff2, coff3, a+a2, -a2, true) 
+		 	streetutil2.applyTangentBoostLastEdge(rampedges, boost)
+			local rampToUse = highwaylevel == 1 and rampground or rampedges
+			
+		--	print("The angle was", streetutil2.signedAngle(streetutil2.v3fromArr(rampedges[#rampedges-1][2]), streetutil2.v3fromArr(rampedges[#rampedges-2][2])))
+			local rampsplit2 = createExit(rampedges, exit2, juncoff2, coff3, a2-a , -a2, true,o) 
+			streetutil2.applyTangentBoostLastEdge(rampedges, boost)
+			
+			
+			streetutil2.addArc(rampToUse, a2,a,rampsplit1, exit5)
+		 	streetutil2.addArc(rampToUse, a,a2-a,exit5, rampsplit2)
+		--	print("The angle was", streetutil2.signedAngle(streetutil2.v3fromArr(rampedges[#rampedges-1][2]), streetutil2.v3fromArr(rampedges[#rampedges-2][2])))
+		 
+	 
+	  
+	 
+			local ramplen = length/4 --80
+			local diverge = 20--20
+			local function s(a, b)
+				return a>0 and a-b or a+b
+			end
+			local function addOverramp(startRotation, p1, p2, zhigh)
+				local coff2 =0 --coff/3
+				local xoffset = startRotation == 0 and ramplen or  coff2
+				local yoffset = startRotation == 0 and  coff2 or ramplen
+				local p3 = vec3.new(s(p1.x,xoffset), s(p1.y,yoffset), p1.z+zoffset/2)
+				local p4 = vec3.new(s(p2.x,yoffset), s(p2.y,xoffset), p2.z+zoffset/2)
+				local diverge = 40
+				--streetutil2.addArc(rampground,startRotation+diverge, -diverge, p1,p3)
+				streetutil.addRamp(rampground, p1,p3)
+				 streetutil.addRamp(rampground, p4,p2)
+				streetutil2.addSplitArc(rampbridge,startRotation, 90, p3, p4, zhigh)
+			end
+			local function addInneramp(startRotation, p1, p2 )
+				local coff2 = -coff/2
+				local xoffset = startRotation == 0 and ramplen/2 or  coff2
+				local yoffset = startRotation == 0 and  coff2 or ramplen/2
+				local p3 = vec3.new(s(p1.x,xoffset), s(p1.y,yoffset), p1.z)
+				local p4 = vec3.new(s(p2.x,yoffset), s(p2.y,xoffset), p2.z)
+				local innerdiverge=2*diverge
+				streetutil2.addArc(rampground,startRotation-innerdiverge, innerdiverge, p1,p3)
+				streetutil2.addArc(rampground,startRotation, 90, p3,p4)
+				streetutil2.addArc(rampground,startRotation+90, innerdiverge, p4,p2) 
+			end
+		end
+		
+	
+	 
+ 
+		local function findSnapNodes(edges)
+			local result = {}
+			local maxlenght = length+basetail
+			if params.juncount > 0 then 
+				maxlenght = maxlenght + juncinterval
+			end
+			
+			for i, edge in pairs(edges) do
+		
+				if  math.abs(edge[1][1])==maxlenght or math.abs(edge[1][2])==maxlenght then
+					result[#result+1]=i-1
+				end
+				if params.juncount == 1 and (edge[1][2]==length+basetail or edge[1][1]==length+basetail) then
+					result[#result+1]=i-1
+				end
+				
+			end
+			return result
+		end
+		
+		local function findJuncSnapNodes(edges)
+			local result = {}			
+			for i = 1, 1+2*params.juncount, 2 do
+				table.insert(result,i)
+			end
+			return result
+		end
+	 
+		local mainEdgeType = highwaylevel == 1 and "BRIDGE" or highwaylevel == 2 and "TUNNEL" or nil
+		local mainEdgeTypeName = highwaylevel == 1 and "cement.lua" or highwaylevel == 2 and "street_old.lua" or nil
+		
+		local rampBridgeType = highwaylevel == 0 and "BRIDGE" or nil
+		local rampBridgeTypeName = highwaylevel == 0 and "cement.lua" or nil
+		local ramptype = "1l_wide_sliproadv2.lua"
+		--local ramptype = "1l_wide_sliproad2lequivalent"
+		if size == 0 or params.stackinterchangelanes == 0 then 
+			ramptype = "1l_wide_sliproad2lequivalent.lua"
+		end 
+		if params.isUseVanillaRamps then 
+			ramptype = "standard/country_medium_one_way_new.lua"
+		end 
+		--local ramptype = "1l_wide_sliproad2lequivalent.lua"
+		--local ramptype = "1l_wide_sliproad3lequivalent.lua"
+		--local ramptype = "1l_sliproadv2.lua"
+		--local ramptype = "standard/country_small_one_way_new.lua"
+		result.edgeLists = {
+			{
+				type = "STREET",
+				edgeType = mainEdgeType,
+				edgeTypeName = mainEdgeTypeName,
+				params = {
+					type =streetutil2.getRoadType(params),
+
+				},
+				edges =   hiwayedges,
+				tag="hiwayedges",
+				snapNodes =   {},
+				freeNodes = {},
+			},
+					{
+				type = "STREET",
+				
+				params = {
+					type = "standard/country_large_new.lua",
+
+				},
+				edges = fourlaneroad,
+				snapNodes = {},-- findJuncSnapNodes(twolaneroad),
+				freeNodes = {},-- streetutil.freeAllNodes(fourlaneroad),
+			},
+							{
+				type = "STREET",
+				
+				params = {
+					type = "standard/country_medium_new.lua",
+
+				},
+				edges = twolaneroad,
+				snapNodes =  {},
+				freeNodes = {},
+			},
+										{
+				type = "STREET",
+				
+				params = {
+					type = "standard/country_medium_new.lua",
+
+				},
+				edgeType = "BRIDGE",
+				 edgeTypeName = "cement.lua",
+				edges = twolanebridge,
+				snapNodes = {},-- findSnapNodes(hiwayedges),
+				freeNodes = {},
+			},
+								{
+				 skipCollision = true,
+				type = "STREET",
+				edgeType = mainEdgeType,
+				edgeTypeName = mainEdgeTypeName,
+				params = {
+					type = ramptype,
+				},
+				edges = rampedges,
+				type = "STREET",
+				snapNodes = {},
+				freeNodes = {},
+			},
+								{
+				type = "STREET",
+				params = {
+					type = "standard/country_medium_one_way_new.lua",
+				},
+				edges = rampbridge,
+								type = "STREET",
+				 edgeType = rampBridgeType,
+				 edgeTypeName = rampBridgeTypeName,
+				snapNodes = {},
+				freeNodes = {},
+			},
+											{
+				type = "STREET",
+				params = {
+					type = ramptype,
+				},
+				tag="rampground",
+				edges = rampground,
+								type = "STREET",
+				 
+				snapNodes = {},
+				freeNodes = {},
+			},
+
+
+			
+		}
+		table.insert(result.edgeLists, {
+				type = "STREET",
+				edgeType = mainEdgeType,
+				edgeTypeName = mainEdgeTypeName,
+				params = {
+					--type =streetutil2.getTailRoadType(params),
+					type =streetutil2.getRoadType(params),
+				},
+				edges = tailedges,
+				tag="hiwayedges",
+				snapNodes =   {},
+				freeNodes = {},
+			})
+		
+		streetutil2.applySpecialArgs(params,result)
+		
+
+		result.groundFaces = { }
+
+		result.cost = 0
+		end, function(e) print(e, debug.traceback()) end)
+		return result
+	end
+}
+
+end
