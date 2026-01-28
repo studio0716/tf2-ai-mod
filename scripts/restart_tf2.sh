@@ -8,7 +8,7 @@ echo "Launching via Steam..."
 open "steam://run/1066780"
 sleep 15
 echo "Waiting for menu interaction..."
-/usr/local/bin/python click_menu.py
+/usr/local/bin/python "$(dirname "$0")/click_menu.py"
 
 echo "Waiting for game to load (20s)..."
 sleep 15
